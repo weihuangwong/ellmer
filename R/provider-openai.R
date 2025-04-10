@@ -247,7 +247,14 @@ method(value_turn, ProviderOpenAI) <- function(
     input = result$usage$prompt_tokens,
     output = result$usage$completion_tokens
   )
-  Turn(message$role %||% "assistant", content, json = result, tokens = tokens)
+  
+  # Add explicit role check with error handling to make the issue clearer
+  role <- message$role
+  if (is.null(role)) {
+    role <- "assistant"
+  }
+  
+  Turn(role, content, json = result, tokens = tokens)
 }
 
 # ellmer -> OpenAI --------------------------------------------------------------
