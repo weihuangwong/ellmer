@@ -75,6 +75,44 @@ method(as_json, list(ProviderVllm, ToolDef)) <- function(provider, x) {
   )
 }
 
+# Explicit role handling for vLLM and similar servers
+method(value_turn, ProviderVllm) <- function(
+  provider,
+  result,
+  has_type = FALSE
+) {
+  if (has_name(result$choices[[1]], "delta")) {
+    # streaming
+    message <- result$choices[[1]]$delta
+  } else {
+    message <- result$choices[[1]]$message
+  }
+
+  if (has_type) {
+    json <- jsonlite::parse_json(message$content[[1]])
+    content <- list(ContentJson(json))
+  } else {
+    content <- lapply(message$content, as_content)
+  }
+  if (has_name(message, "tool_calls")) {
+    calls <- lapply(message$tool_calls, function(call) {
+      name <- call$`function`$name
+      args <- jsonlite::parse_json(call$`function`$arguments)
+      ContentToolRequest(name = name, arguments = args, id = call$id)
+    })
+    content <- c(content, calls)
+  }
+  tokens <- tokens_log(
+    provider,
+    input = result$usage$prompt_tokens,
+    output = result$usage$completion_tokens
+  )
+  
+  # Always provide a default role for vLLM-based servers
+  # as they often don't include roles in responses
+  Turn("assistant", content, json = result, tokens = tokens)
+}
+
 vllm_key <- function() {
   key_get("VLLM_API_KEY")
 }
